@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Training outputs
+logs/
+outputs/
+wandb/
+
+# Entrypoint logs written next to cwd by train scripts
+train_*.log
