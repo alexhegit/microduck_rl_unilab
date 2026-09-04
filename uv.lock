@@ -1295,9 +1295,9 @@ requires-dist = [
     { name = "torch", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", specifier = "==2.9.0" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", specifier = "==2.8.0", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torch", marker = "sys_platform == 'win32'", specifier = "==2.8.0", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "unilab", extras = ["mujoco", "mjwarp"], git = "https://github.com/Motphys/UniLab.git?rev=f7591657fb1cf22188892282cb598af34f072ece" },
+    { name = "unilab", extras = ["mujoco", "mjwarp"], git = "https://github.com/Motphys/UniLab.git?rev=f97c19ef2a24f032952ec58deab27af2c7b603c9" },
     { name = "unilab-rl", specifier = "==0.2.0" },
-    { name = "unisim-core", git = "https://github.com/unilabsim/unisim.git?rev=61aaa34d5ddbc46ca163e720268c0c388485d7de" },
+    { name = "unisim-core", specifier = "==1.0.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -3010,7 +3010,7 @@ wheels = [
 [[package]]
 name = "unilab"
 version = "0.1.0"
-source = { git = "https://github.com/Motphys/UniLab.git?rev=f7591657fb1cf22188892282cb598af34f072ece#f7591657fb1cf22188892282cb598af34f072ece" }
+source = { git = "https://github.com/Motphys/UniLab.git?rev=f97c19ef2a24f032952ec58deab27af2c7b603c9#f97c19ef2a24f032952ec58deab27af2c7b603c9" }
 dependencies = [
     { name = "etils", version = "1.13.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "etils", version = "1.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -3085,12 +3085,13 @@ wheels = [
 [[package]]
 name = "unisim-core"
 version = "1.0.0"
-source = { git = "https://github.com/unilabsim/unisim.git?rev=61aaa34d5ddbc46ca163e720268c0c388485d7de#61aaa34d5ddbc46ca163e720268c0c388485d7de" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/75/f9/a1ac688cf7f5ca6a05d40055ca52be4c564b4d103147ba2aaaebfd49679e/unisim_core-1.0.0.tar.gz", hash = "sha256:803dcfb6a8f024b7efa67d0f38e36bc684cd642d4ca977e89caa6249e551bd1f", size = 187750, upload-time = "2026-09-04T11:08:51.677Z" }
 
 [[package]]
 name = "urllib3"

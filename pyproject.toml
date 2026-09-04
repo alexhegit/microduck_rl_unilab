@@ -16,11 +16,13 @@ dependencies = [
     # read_reset_root_pose base API (#1494). Switch back to
     # "unilab[mujoco,mjwarp]==x.y.z" once a release includes both.
     "unilab[mujoco,mjwarp]",
+    # Held at 0.2.0: unilab @f97c19ef itself pins unilab-rl==0.2.0, so 1.0.0
+    # can only be adopted once unilab relaxes/bumps that pin.
     "unilab-rl==0.2.0",
-    # Re-declared as a direct dependency so the git source below applies
-    # (tool.uv.sources only affects direct dependencies); bound mirrors
-    # unilab's own unisim-core constraint.
-    "unisim-core>=0.1.14",
+    # BAM voltage actuation on the mjwarp backend requires the
+    # set_pre_step_control implementation from unilabsim/unisim PR #20,
+    # first released in unisim-core 1.0.0.
+    "unisim-core==1.0.0",
     # Re-declared as a direct dependency so the cu128 index source below
     # applies (tool.uv.sources only affects direct dependencies); pins mirror
     # unilab's own torch markers.
@@ -44,11 +46,7 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
-unilab = { git = "https://github.com/Motphys/UniLab.git", rev = "f7591657fb1cf22188892282cb598af34f072ece" }
-# Temporary git pin: PyPI unisim-core 1.0.0 predates unilabsim/unisim PR #20
-# (mjwarp set_pre_step_control, required for BAM voltage actuation on the
-# mjwarp backend). Drop this pin once a unisim-core release includes #20.
-unisim-core = { git = "https://github.com/unilabsim/unisim.git", rev = "61aaa34d5ddbc46ca163e720268c0c388485d7de" }
+unilab = { git = "https://github.com/Motphys/UniLab.git", rev = "f97c19ef2a24f032952ec58deab27af2c7b603c9" }
 torch = [
     { index = "pytorch-cu128", marker = "sys_platform=='linux' and platform_machine=='x86_64'" },
     { index = "pytorch-cu128", marker = "sys_platform=='win32'" },
