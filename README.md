@@ -42,14 +42,13 @@ uv sync
 ```
 
 > **注意**：`unilab` 当前临时 git-pin 到
-> [`Motphys/UniLab@f97c19ef`](https://github.com/Motphys/UniLab/commit/f97c19ef2a24f032952ec58deab27af2c7b603c9)（PR #1495 合入提交），
-> 因为 PyPI 的 unilab 0.1.0 尚未包含仓内 microduck 任务移除（PR #1495）与
-> `read_reset_root_pose` 基础 API（PR #1494）。`unisim-core==1.0.0` 已从 PyPI
-> 解析（1.0.0 起包含 mjwarp `set_pre_step_control`，PR #20，BAM×mjwarp 必需）。
-> `unilab-rl` 暂留 0.2.0：unilab @f97c19ef 自身 pin 死 `unilab-rl==0.2.0`，
-> 1.0.0 要等 unilab 放宽该约束后才能升级。待包含上述变更的 unilab 版本发布到
-> PyPI 后，请把 `pyproject.toml` 改回 `unilab[mujoco,mjwarp]==x.y.z` +
-> `unilab-rl==1.0.0` 并删除 `[tool.uv.sources]` 中的 git pin。
+> [`Motphys/UniLab@6b9d8a94`](https://github.com/Motphys/UniLab/commit/6b9d8a94aaf59019074029edc68a9c318cf8d4d2)（PR #1496 合入提交），
+> 因为 PyPI 的 unilab 0.1.0 尚未包含仓内 microduck 任务移除（PR #1495）、
+> `read_reset_root_pose` 基础 API（PR #1494）与 `unilab-rl==1.0.0` 升级（PR #1496）。
+> `unisim-core==1.0.0` 与 `unilab-rl==1.0.0` 均从 PyPI 解析（unisim-core 1.0.0
+> 起包含 mjwarp `set_pre_step_control`，PR #20，BAM×mjwarp 必需）。待包含上述
+> 变更的 unilab 版本发布到 PyPI 后，请把 `pyproject.toml` 改回
+> `unilab[mujoco,mjwarp]==x.y.z` 并删除 `[tool.uv.sources]` 中的 git pin。
 
 ## 训练
 
