@@ -11,11 +11,10 @@ license = "Apache-2.0"
 authors = [{ name = "UniLab" }]
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    # unilab is temporarily git-pinned: PyPI unilab 0.1.0 predates both the
-    # in-repo microduck removal (Motphys/UniLab#1495) and the
-    # read_reset_root_pose base API (#1494). Switch back to
-    # "unilab[mujoco,mjwarp]==x.y.z" once a release includes both.
-    "unilab[mujoco,mjwarp]",
+    # UniLab 1.0.0 on PyPI includes the in-repo microduck removal
+    # (Motphys/UniLab#1495), the read_reset_root_pose base API (#1494) and
+    # the unilab-rl==1.0.0 pin (#1496).
+    "unilab[mujoco,mjwarp]==1.0.0",
     "unilab-rl==1.0.0",
     # BAM voltage actuation on the mjwarp backend requires the
     # set_pre_step_control implementation from unilabsim/unisim PR #20,
@@ -44,7 +43,6 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
-unilab = { git = "https://github.com/Motphys/UniLab.git", rev = "6b9d8a94aaf59019074029edc68a9c318cf8d4d2" }
 torch = [
     { index = "pytorch-cu128", marker = "sys_platform=='linux' and platform_machine=='x86_64'" },
     { index = "pytorch-cu128", marker = "sys_platform=='win32'" },
