@@ -22,15 +22,16 @@ owner 配置和机器人 XML 资产。
 | task | ppo | sac |
 |------|-----|-----|
 | `microduck_velocity_flat` | mujoco, mjwarp | mujoco, mjwarp |
-| `microduck_velocity_bam_flat` | mujoco | — |
 | `microduck_velstand_flat` | mujoco | — |
 | `microduck_standup_flat` | mujoco | — |
 | `microduck_ground_pick_flat` | mjwarp | — |
 | `microduck_sitstand_flat` | mjwarp | — |
 
-BAM 电压驱动变体（velocity_bam / velstand / standup）只在 mujoco 后端注册：
-substep 状态反馈契约（`SimBackend.set_pre_step_control`）在 mjwarp
-host_numpy profile 上不可用。
+任务与上游 microduck_rl 保持 1:1：BAM（bam xl330-m6 电压伺服模型，
+`BamVoltageAction` 逐 substep 力矩路径）是上游唯一的驱动器模型，因此本仓库
+所有任务统一走 BAM，不再保留早期移植的简化位置驱动变体。
+BAM 的 substep 状态反馈契约（`SimBackend.set_pre_step_control`）在 mujoco 与
+mjwarp 后端均已可用（后者自 unisim PR #20 起）。
 
 ## 安装
 
@@ -43,9 +44,11 @@ uv sync
 > **注意**：`unilab` 当前临时 git-pin 到
 > [`Motphys/UniLab@f7591657`](https://github.com/Motphys/UniLab/commit/f7591657fb1cf22188892282cb598af34f072ece)，
 > 因为 PyPI 的 unilab 0.1.0 尚未包含仓内 microduck 任务移除（PR #1495）与
-> `read_reset_root_pose` 基础 API（PR #1494）。待包含这两者的 unilab 版本发布到
-> PyPI 后，请把 `pyproject.toml` 改回 `unilab[mujoco,mjwarp]==x.y.z` 并删除
-> `[tool.uv.sources]` 中的 git pin。
+> `read_reset_root_pose` 基础 API（PR #1494）。同样，`unisim-core` 临时 git-pin 到
+> [`unilabsim/unisim@61aaa34`](https://github.com/unilabsim/unisim/commit/61aaa34d5ddbc46ca163e720268c0c388485d7de)，
+> 因为 PyPI 的 unisim-core 1.0.0 尚未包含 mjwarp `set_pre_step_control`（PR #20，
+> BAM×mjwarp 必需）。待包含上述变更的版本发布到 PyPI 后，请把 `pyproject.toml`
+> 改回 `unilab[mujoco,mjwarp]==x.y.z` 并删除 `[tool.uv.sources]` 中的两个 git pin。
 
 ## 训练
 
@@ -102,12 +105,12 @@ src/microduck_rl_unilab/
 ├── cli.py                          # microduck-train / microduck-eval：env var + --config-dir 注入
 ├── conf_searchpath.py              # Hydra SearchPathPlugin（测试/脚本的程序化 compose 用）
 ├── conf/
-│   ├── ppo/task/microduck_{velocity_flat,velocity_bam_flat,velstand_flat,standup_flat,ground_pick_flat,sitstand_flat}/
+│   ├── ppo/task/microduck_{velocity_flat,velstand_flat,standup_flat,ground_pick_flat,sitstand_flat}/
 │   └── sac/task/microduck_velocity_flat/
 └── tasks/
     ├── __init__.py                 # __unilab_registry_modules__
     └── microduck/
-        ├── __init__.py             # 6 个任务的 registry.register_env
+        ├── __init__.py             # 5 个任务的 registry.register_env
         ├── manager_terms.py        # velocity command / 奖励 terms
         ├── recovery_terms.py       # velstand 跌倒恢复 terms
         ├── standup_terms.py        # standup / ground_pick / sitstand terms

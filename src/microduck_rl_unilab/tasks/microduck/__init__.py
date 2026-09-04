@@ -28,18 +28,7 @@ registry.register_env(
     sim_backend="mjwarp",
 )
 
-# BAM voltage-actuator variant (issue #1474): mujoco only, because the substep
-# state-feedback contract (SimBackend.set_pre_step_control) is unavailable on
-# the mjwarp host_numpy profile.
-registry.register_env_config("MicroduckVelocityBamFlat", ManagerBasedRlEnvCfg)
-registry.register_env(
-    "MicroduckVelocityBamFlat",
-    make_microduck_velocity_env,
-    sim_backend="mujoco",
-)
-
-# VelStand (walking + fall recovery) on the ground-contact BAM model; mujoco
-# only for the same BAM substep state-feedback reason as the walk variant.
+# VelStand (walking + fall recovery) on the ground-contact BAM model.
 registry.register_env_config("MicroduckVelstandFlat", ManagerBasedRlEnvCfg)
 registry.register_env(
     "MicroduckVelstandFlat",
@@ -48,7 +37,7 @@ registry.register_env(
 )
 
 # Standup (sit/ground-pose mixed resets -> stand + body-pose tracking) on the
-# ground-contact BAM model; mujoco only for the same BAM reason.
+# ground-contact BAM model.
 registry.register_env_config("MicroduckStandupFlat", ManagerBasedRlEnvCfg)
 registry.register_env(
     "MicroduckStandupFlat",

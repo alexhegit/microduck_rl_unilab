@@ -1,6 +1,11 @@
 # @package _global_
 # Canonical Pollen Robotics MicroDuck Manager-Based velocity task.
 #
+# This task is the upstream microduck_rl velocity task itself: BAM (the bam
+# xl330-m6 voltage-servo model, BamVoltageAction per-substep torque path) is
+# upstream's only actuator model — every upstream task, including velocity,
+# uses it (issue #1474).
+#
 # Reward/MDP stack aligned with upstream microduck_rl HEAD (issue #1455, anchor
 # commit 29e887ec, mjlab 1.3.0): the velocity recipe's reward terms, weights
 # and parameters mirror `microduck_velocity_env_cfg.py` at the anchor; terms
@@ -11,7 +16,7 @@
 # steps, matching UniLab's num_steps_per_env=24).
 env:
   scene:
-    model_file: assets/robots/microduck/scene_flat.xml
+    model_file: assets/robots/microduck/scene_flat_bam.xml
     fragment_files: [assets/robots/microduck/locomotion_task.xml]
     default_keyframe_name: home
     entities:
@@ -172,11 +177,23 @@ env:
             sensor_groups: [[left_foot_contact], [right_foot_contact]]
   actions:
     joint_pos:
-      _target_: unilab.envs.mdp.JointPositionActionCfg
+      # Upstream bam xl330-m6 (microduck_rl microduck_constants.py): kp_fw=200,
+      # vin ~ U(6.5, 8.2) sampled once at startup, load-dependent sag
+      # vin_drop_gain ~ U(0.0, 0.2) V/Nm floored at 6.0 V, command delay lag ~
+      # U{3..6} physics substeps resampled every substep, friction budget
+      # scaled per episode by U(0.9, 1.1). The fitted electrical/friction
+      # constants stay at the dataclass defaults (= bam params xl330/m6.json).
+      _target_: microduck_rl_unilab.tasks.microduck.bam_action.BamVoltageActionCfg
       entity_name: robot
       actuator_names: [".*"]
       scale: 1.0
-      use_default_offset: true
+      kp_fw: 200.0
+      vin_range: [6.5, 8.2]
+      vin_drop_gain_range: [0.0, 0.2]
+      vin_min: 6.0
+      delay_min_lag: 3
+      delay_max_lag: 6
+      friction_scale_range: [0.9, 1.1]
   commands:
     twist:
       _target_: microduck_rl_unilab.tasks.microduck.manager_terms.MicroduckVelocityCommandCfg

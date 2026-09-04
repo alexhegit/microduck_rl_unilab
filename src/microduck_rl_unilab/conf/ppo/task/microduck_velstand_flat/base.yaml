@@ -1,7 +1,7 @@
 # @package _global_
 # MicroDuck VelStand task: walking + fall recovery in one policy, ported from
 # the upstream microduck_rl microduck_velstand_env_cfg.py (anchor commit
-# 29e887e). Built on the BAM velocity recipe (task/microduck_velocity_bam_flat,
+# 29e887e). Built on the BAM velocity recipe (task/microduck_velocity_flat,
 # issue #1474): observations, commands, DR events and the walk reward layer are
 # item-for-item identical. Deltas:
 #   - Robot = ground-contact BAM XML (body shells collide, so the robot can

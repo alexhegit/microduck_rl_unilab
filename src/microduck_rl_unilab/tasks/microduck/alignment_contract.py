@@ -58,10 +58,10 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 # ``register_conf_search_path()`` inside ``compose_task``.
 CONF_DIR = package_root() / "conf" / CONF_TREE
 # Files probed for the MuJoCo ``<option>`` solver element, in priority order.
-# ``scene_flat.xml`` includes ``microduck.xml``; both are parsed standalone.
+# ``scene_flat_bam.xml`` includes ``microduck_bam.xml``; both are parsed standalone.
 XML_OPTION_FILES: tuple[str, ...] = (
-    "assets/robots/microduck/scene_flat.xml",
-    "assets/robots/microduck/microduck.xml",
+    "assets/robots/microduck/scene_flat_bam.xml",
+    "assets/robots/microduck/microduck_bam.xml",
 )
 
 ABSENT = "<absent>"
@@ -138,7 +138,7 @@ ENTRIES: tuple[AlignmentEntry, ...] = (
         _xml_option("integrator"),
         "implicitfast",
         "match",
-        "scene_flat.xml <option>；mujoco_warp 3.10 实现了 IMPLICITFAST（forward.py fwd_position）。",
+        "scene_flat_bam.xml <option>；mujoco_warp 3.10 实现了 IMPLICITFAST（forward.py fwd_position）。",
     ),
     AlignmentEntry(
         "physics.solver.solver",
@@ -146,7 +146,7 @@ ENTRIES: tuple[AlignmentEntry, ...] = (
         _xml_option("solver"),
         "Newton",
         "match",
-        "scene_flat.xml <option>（MJCF 区分大小写，Newton 为正典拼写）；上游 mjlab SimCfg 默认 newton。",
+        "scene_flat_bam.xml <option>（MJCF 区分大小写，Newton 为正典拼写）；上游 mjlab SimCfg 默认 newton。",
     ),
     AlignmentEntry(
         "physics.solver.cone",
@@ -154,7 +154,7 @@ ENTRIES: tuple[AlignmentEntry, ...] = (
         _xml_option("cone"),
         "pyramidal",
         "match",
-        "scene_flat.xml <option>。",
+        "scene_flat_bam.xml <option>。",
     ),
     AlignmentEntry(
         "physics.solver.iterations",
@@ -162,7 +162,7 @@ ENTRIES: tuple[AlignmentEntry, ...] = (
         _xml_option("iterations"),
         10,
         "match",
-        "scene_flat.xml <option>；上游 velocity flat 配方为 10。",
+        "scene_flat_bam.xml <option>；上游 velocity flat 配方为 10。",
     ),
     AlignmentEntry(
         "physics.solver.ls_iterations",
@@ -170,7 +170,7 @@ ENTRIES: tuple[AlignmentEntry, ...] = (
         _xml_option("ls_iterations"),
         20,
         "match",
-        "scene_flat.xml <option>；上游为 20。",
+        "scene_flat_bam.xml <option>；上游为 20。",
     ),
     AlignmentEntry(
         "physics.solver.tolerance",
@@ -178,7 +178,7 @@ ENTRIES: tuple[AlignmentEntry, ...] = (
         _xml_option("tolerance"),
         1e-8,
         "match",
-        "scene_flat.xml <option>。",
+        "scene_flat_bam.xml <option>。",
     ),
     AlignmentEntry(
         "physics.solver.ls_tolerance",
@@ -186,7 +186,7 @@ ENTRIES: tuple[AlignmentEntry, ...] = (
         _xml_option("ls_tolerance"),
         0.01,
         "match",
-        "scene_flat.xml <option>。",
+        "scene_flat_bam.xml <option>。",
     ),
     # ------------------------------------------------------------------
     # mdp: actions / observations
@@ -199,12 +199,13 @@ ENTRIES: tuple[AlignmentEntry, ...] = (
         "match",
     ),
     AlignmentEntry(
-        "mdp.action_use_default_offset",
+        "mdp.action_kp_fw",
         "mdp",
-        _hydra("env.actions.joint_pos.use_default_offset"),
-        True,
+        _hydra("env.actions.joint_pos.kp_fw"),
+        200.0,
         "match",
-        "JointPositionActionCfg 围绕默认姿态（HOME）偏移。",
+        "BAM 是上游唯一驱动器模型：BamVoltageAction 固件 P 增益 200（Dynamixel KP "
+        "寄存器域）；q_des = action * scale + default_joint_pos，仍围绕 HOME 偏移。",
     ),
     AlignmentEntry(
         "mdp.obs_dim.policy",

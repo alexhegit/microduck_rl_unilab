@@ -3,9 +3,11 @@
 # Environment, command, event, termination, curriculum, and reward semantics are
 # identical to the on-policy owner (conf/ppo/task/microduck_velocity_flat/base.yaml);
 # backend owner leaves inherit this file and only carry backend/algo identity.
+# BAM (BamVoltageAction per-substep torque path) is upstream's only actuator
+# model, so this task uses it too (issue #1474).
 env:
   scene:
-    model_file: assets/robots/microduck/scene_flat.xml
+    model_file: assets/robots/microduck/scene_flat_bam.xml
     fragment_files: [assets/robots/microduck/locomotion_task.xml]
     default_keyframe_name: home
     entities:
@@ -165,11 +167,23 @@ env:
             sensor_groups: [[left_foot_contact], [right_foot_contact]]
   actions:
     joint_pos:
-      _target_: unilab.envs.mdp.JointPositionActionCfg
+      # Upstream bam xl330-m6 (microduck_rl microduck_constants.py): kp_fw=200,
+      # vin ~ U(6.5, 8.2) sampled once at startup, load-dependent sag
+      # vin_drop_gain ~ U(0.0, 0.2) V/Nm floored at 6.0 V, command delay lag ~
+      # U{3..6} physics substeps resampled every substep, friction budget
+      # scaled per episode by U(0.9, 1.1). The fitted electrical/friction
+      # constants stay at the dataclass defaults (= bam params xl330/m6.json).
+      _target_: microduck_rl_unilab.tasks.microduck.bam_action.BamVoltageActionCfg
       entity_name: robot
       actuator_names: [".*"]
       scale: 1.0
-      use_default_offset: true
+      kp_fw: 200.0
+      vin_range: [6.5, 8.2]
+      vin_drop_gain_range: [0.0, 0.2]
+      vin_min: 6.0
+      delay_min_lag: 3
+      delay_max_lag: 6
+      friction_scale_range: [0.9, 1.1]
   commands:
     twist:
       _target_: microduck_rl_unilab.tasks.microduck.manager_terms.MicroduckVelocityCommandCfg

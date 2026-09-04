@@ -19,11 +19,11 @@ from unilab.base.config_adapter import BackendAdapter
 from unilab.base.config_materialization import apply_cfg_overrides
 from unilab.envs import ManagerBasedRlEnvCfg
 from unilab.envs.mdp import (
-    JointPositionActionCfg,
     UniformPoseCommandCfg,
     randomize_body_mass_inertia,
 )
 from microduck_rl_unilab.tasks import __unilab_registry_modules__
+from microduck_rl_unilab.tasks.microduck.bam_action import BamVoltageActionCfg
 from microduck_rl_unilab.tasks.microduck.deploy_contract import (
     MICRODUCK_ACTOR_OBS_DIM,
     MICRODUCK_CRITIC_OBS_DIM,
@@ -91,7 +91,7 @@ def test_microduck_owner_materializes_complete_manager_contract() -> None:
     assert env_cfg.max_episode_seconds == pytest.approx(20.0)
     assert env_cfg.policy_observation_group == "policy"
     assert env_cfg.critic_observation_group == "critic"
-    assert env_cfg.scene.model_file.endswith("robots/microduck/scene_flat.xml")
+    assert env_cfg.scene.model_file.endswith("robots/microduck/scene_flat_bam.xml")
     assert env_cfg.scene.fragment_files[0].endswith("robots/microduck/locomotion_task.xml")
     assert env_cfg.scene.default_keyframe_name == "home"
     robot = env_cfg.scene.entities["robot"]
@@ -99,11 +99,19 @@ def test_microduck_owner_materializes_complete_manager_contract() -> None:
     assert tuple(robot.joint_names) == JOINT_NAMES
     assert tuple(robot.actuator_names) == JOINT_NAMES
 
+    # BAM is upstream's only actuator model: the velocity task drives the
+    # xl330-m6 voltage servos through BamVoltageAction.
     action = env_cfg.actions["joint_pos"]
-    assert isinstance(action, JointPositionActionCfg)
+    assert isinstance(action, BamVoltageActionCfg)
     assert action.actuator_names == [".*"]
     assert action.scale == pytest.approx(1.0)
-    assert action.use_default_offset is True
+    assert action.kp_fw == pytest.approx(200.0)
+    assert tuple(action.vin_range) == (6.5, 8.2)
+    assert tuple(action.vin_drop_gain_range) == (0.0, 0.2)
+    assert action.vin_min == pytest.approx(6.0)
+    assert action.delay_min_lag == 3
+    assert action.delay_max_lag == 6
+    assert tuple(action.friction_scale_range) == (0.9, 1.1)
 
     policy = env_cfg.observations["policy"].terms
     critic = env_cfg.observations["critic"].terms

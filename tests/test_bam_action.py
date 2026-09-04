@@ -381,11 +381,10 @@ def _materialize(task: str, task_name: str) -> tuple[Any, ManagerBasedRlEnvCfg]:
     return cfg, env_cfg
 
 
-def test_bam_owner_materializes_and_matches_pd_recipe() -> None:
-    cfg, env_cfg = _materialize("microduck_velocity_bam_flat", "MicroduckVelocityBamFlat")
-    _, pd_env_cfg = _materialize("microduck_velocity_flat", "MicroduckVelocityFlat")
+def test_velocity_owner_materializes_bam_action() -> None:
+    cfg, env_cfg = _materialize("microduck_velocity_flat", "MicroduckVelocityFlat")
 
-    assert cfg.training.task_name == "MicroduckVelocityBamFlat"
+    assert cfg.training.task_name == "MicroduckVelocityFlat"
     assert cfg.training.sim_backend == "mujoco"
     assert env_cfg.scene is not None
     assert env_cfg.scene.model_file.endswith("robots/microduck/scene_flat_bam.xml")
@@ -403,31 +402,19 @@ def test_bam_owner_materializes_and_matches_pd_recipe() -> None:
     assert action.delay_max_lag == 6
     assert tuple(action.friction_scale_range) == (0.9, 1.1)
 
-    # Controlled actuator experiment: reward / observation / command /
-    # termination / curriculum stacks are identical to the PD owner.
-    assert {name: term.weight for name, term in env_cfg.rewards.items()} == {
-        name: term.weight for name, term in pd_env_cfg.rewards.items()
-    }
-    assert list(env_cfg.observations) == list(pd_env_cfg.observations)
-    assert list(env_cfg.commands) == list(pd_env_cfg.commands)
-    assert list(env_cfg.terminations) == list(pd_env_cfg.terminations)
-    assert list(env_cfg.curriculum) == list(pd_env_cfg.curriculum)
-    # Events: same DR stack as the PD owner (encoder bias, armature, CoM,
-    # mass/inertia, foot friction); BAM-specific DR lives inside the term.
-    assert list(env_cfg.events) == list(pd_env_cfg.events)
-
     registered = registry.list_registered_envs()
-    assert registered["MicroduckVelocityBamFlat"]["available_backends"] == ["mujoco"]
+    assert registered["MicroduckVelocityFlat"]["available_backends"] == ["mujoco", "mjwarp"]
+    assert "MicroduckVelocityBamFlat" not in registered
 
 
 @pytest.mark.slow
 def test_bam_owner_builds_and_steps_real_mujoco_env() -> None:
     pytest.importorskip("mujoco")
-    cfg, _ = _materialize("microduck_velocity_bam_flat", "MicroduckVelocityBamFlat")
+    cfg, _ = _materialize("microduck_velocity_flat", "MicroduckVelocityFlat")
     env = cast(
         Any,
         registry.make(
-            "MicroduckVelocityBamFlat",
+            "MicroduckVelocityFlat",
             sim_backend="mujoco",
             num_envs=2,
             env_cfg_override=BackendAdapter(

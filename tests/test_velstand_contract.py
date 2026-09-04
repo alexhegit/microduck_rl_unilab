@@ -264,7 +264,6 @@ def test_velocity_owners_keep_head_pose_bias_ungated() -> None:
     """Regression: the gate params default to off so the walk tasks are unchanged."""
     for task, task_name in (
         ("microduck_velocity_flat/mujoco", "MicroduckVelocityFlat"),
-        ("microduck_velocity_bam_flat/mujoco", "MicroduckVelocityBamFlat"),
     ):
         _, env_cfg = _materialize(task, task_name)
         params = env_cfg.rewards["head_pose_bias"].params
