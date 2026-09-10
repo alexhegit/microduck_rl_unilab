@@ -29,13 +29,16 @@ from unilab.base import registry
 from unilab.base.config_adapter import BackendAdapter
 from unilab.cli import package_root
 from unilab.training import algo_config_dict
-from unilab.utils.rotation import np_wrap_to_pi
+from unilab.utils.rotation import np_quat_apply, np_wrap_to_pi
 
 from microduck_rl_unilab.conf_searchpath import register_conf_search_path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONF_DIR = package_root() / "conf" / "ppo"
+# Head body plus its local "top of the head" axis, measured at the home keyframe.
+HEAD_BODY = "jaw_soft"
+HEAD_UP_AXIS_B = np.array([[1.0, 0.0, 0.0]])
 
 
 def _compose_owner(
@@ -159,8 +162,21 @@ def evaluate(
         speed_sum = np.zeros(num_envs, dtype=np.float64)
         lateral_sum = np.zeros(num_envs, dtype=np.float64)
         heading_error_sum = np.zeros(num_envs, dtype=np.float64)
+        head_error_sum = np.zeros(num_envs, dtype=np.float64)
+        head_yaw_sum = np.zeros(num_envs, dtype=np.float64)
+        head_roll_sum = np.zeros(num_envs, dtype=np.float64)
+        head_pitch_delta_sum = np.zeros(num_envs, dtype=np.float64)
+        head_velocity_sum = np.zeros(num_envs, dtype=np.float64)
+        head_tilt_sum = np.zeros(num_envs, dtype=np.float64)
+        head_inverted_sum = np.zeros(num_envs, dtype=np.float64)
         sample_count = np.zeros(num_envs, dtype=np.int64)
         heading_ref = np.asarray(robot.data.heading_w).copy()
+        head_ids, _ = robot.find_joints(
+            ["neck_pitch", "head_pitch", "head_yaw", "head_roll"],
+            preserve_order=True,
+        )
+        head_body_ids, _ = robot.find_bodies([HEAD_BODY], preserve_order=True)
+        head_body_id = int(head_body_ids[0])
 
         for step in range(total_steps):
             with torch.inference_mode():
@@ -178,9 +194,28 @@ def evaluate(
                 continue
             velocity = np.nan_to_num(np.asarray(robot.data.root_link_lin_vel_b))
             heading_error = np.abs(np_wrap_to_pi(np.asarray(robot.data.heading_w) - heading_ref))
+            head_delta = (
+                np.asarray(robot.data.joint_pos)[:, head_ids]
+                - np.asarray(robot.data.default_joint_pos)[:, head_ids]
+            )
+            head_error = np.mean(np.abs(head_delta), axis=1)
+            head_velocity = np.sqrt(
+                np.mean(np.square(np.asarray(robot.data.joint_vel)[:, head_ids]), axis=1)
+            )
+            head_quat = np.asarray(robot.data.body_link_quat_w)[:, head_body_id, :]
+            head_up_w = np_quat_apply(head_quat.astype(np.float64), HEAD_UP_AXIS_B)
+            head_up_cos = np.nan_to_num(head_up_w[:, 2], nan=-1.0)
+            head_tilt = np.arccos(np.clip(head_up_cos, -1.0, 1.0))
             speed_sum[alive] += velocity[alive, 0]
             lateral_sum[alive] += np.abs(velocity[alive, 1])
             heading_error_sum[alive] += heading_error[alive]
+            head_error_sum[alive] += head_error[alive]
+            head_yaw_sum[alive] += np.abs(head_delta[alive, 2])
+            head_roll_sum[alive] += np.abs(head_delta[alive, 3])
+            head_pitch_delta_sum[alive] += np.mean(head_delta[alive, :2], axis=1)
+            head_velocity_sum[alive] += head_velocity[alive]
+            head_tilt_sum[alive] += head_tilt[alive]
+            head_inverted_sum[alive] += (head_up_cos[alive] < 0.0).astype(np.float64)
             sample_count[alive] += 1
 
         sampled = sample_count > 0
@@ -220,6 +255,45 @@ def evaluate(
                 math.degrees(
                     float(np.mean(heading_error_sum[sampled] / sample_count[sampled]))
                 )
+                if np.any(sampled)
+                else None
+            ),
+            "head_home_error_deg": (
+                math.degrees(float(np.mean(head_error_sum[sampled] / sample_count[sampled])))
+                if np.any(sampled)
+                else None
+            ),
+            "head_yaw_abs_deg": (
+                math.degrees(float(np.mean(head_yaw_sum[sampled] / sample_count[sampled])))
+                if np.any(sampled)
+                else None
+            ),
+            "head_roll_abs_deg": (
+                math.degrees(float(np.mean(head_roll_sum[sampled] / sample_count[sampled])))
+                if np.any(sampled)
+                else None
+            ),
+            "head_forward_pitch_delta_deg": (
+                math.degrees(
+                    float(np.mean(head_pitch_delta_sum[sampled] / sample_count[sampled]))
+                )
+                if np.any(sampled)
+                else None
+            ),
+            "head_joint_velocity_rms_rad_s": (
+                float(np.mean(head_velocity_sum[sampled] / sample_count[sampled]))
+                if np.any(sampled)
+                else None
+            ),
+            # Angle between the top of the head and world up, plus the share of
+            # sampled time the head is past horizontal (i.e. upside down).
+            "head_up_tilt_deg": (
+                math.degrees(float(np.mean(head_tilt_sum[sampled] / sample_count[sampled])))
+                if np.any(sampled)
+                else None
+            ),
+            "head_inverted_time_fraction": (
+                float(np.mean(head_inverted_sum[sampled] / sample_count[sampled]))
                 if np.any(sampled)
                 else None
             ),

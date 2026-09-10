@@ -24,6 +24,8 @@ owner 配置和机器人 XML 资产。
 | `microduck_velocity_flat` | mujoco, mjwarp | mujoco, mjwarp |
 | `microduck_sprint_flat` | mujoco | — |
 | `microduck_sprint_robust_flat` | mujoco | — |
+| `microduck_sprint_gaitfix_flat` | mujoco | — |
+| `microduck_sprint_rollfix_flat` | mujoco | — |
 | `microduck_velstand_flat` | mujoco | — |
 | `microduck_standup_flat` | mujoco | — |
 | `microduck_ground_pick_flat` | mjwarp | — |
@@ -95,7 +97,7 @@ uv run --no-sync scripts/train_sprint_robust.py \
 | 示例 | 速度 | 存活 | 头部倒置 | 说明 |
 |---|---|---|---|---|
 | [`examples/sprint_speed_1p68/`](examples/sprint_speed_1p68/) | 1.682 m/s | 89.8% | ~91% | 速度配方。大腿已左右交替；颈部折叠，头大部分时间倒置。 |
-| [`examples/sprint_head_upright/`](examples/sprint_head_upright/) | 1.315 m/s | 97.9% | 0.6% | 同一套交替步态上把头顶回朝天（本 PR 不含，见后续 PR）。 |
+| [`examples/sprint_head_upright/`](examples/sprint_head_upright/) | 1.315 m/s | 97.9% | 0.6% | 同一套交替步态，头顶朝天、面朝前；航向仍约 42° 左偏。 |
 
 每个目录含 `model_*.pt`、侧视 `play_video_side.gif`、`metrics.json` 和复现命令。
 `model.pt` 约 4.7 MB，直接入 git。

@@ -20,10 +20,15 @@ from unilab.managers import CurriculumTermCfg, RewardTermCfg, SceneEntityCfg
 from unilab.managers._types import ManagerBasedRlEnv
 
 from microduck_rl_unilab.tasks.microduck.sprint_terms import (
+    head_facing_abs_cost,
+    head_upright_hold,
     heading_hold,
+    joint_band_cost,
     running_command_ranges_curriculum,
     running_forward_progress,
+    running_leg_alternation,
     running_planar_drift_cost,
+    running_stride_length,
 )
 from microduck_rl_unilab.tasks.microduck.manager_terms import MicroduckVelocityCommandCfg
 from microduck_rl_unilab.tasks.microduck.deploy_contract import (
@@ -253,3 +258,188 @@ def test_sprint_owner_builds_and_steps_real_mujoco_env() -> None:
         assert "push_robot" not in env.event_manager.active_terms
     finally:
         env.close()
+
+
+def test_sprint_rollfix_owner_declares_head_and_gait_guards() -> None:
+    GlobalHydra.instance().clear()
+    with initialize_config_dir(config_dir=str(CONF_DIR), version_base="1.3"):
+        cfg = compose("config", overrides=["task=microduck_sprint_rollfix_flat/mujoco"])
+    registry.ensure_registries()
+    env_cfg = registry.materialize_env_config("MicroduckSprintFlat")
+    apply_cfg_overrides(
+        env_cfg,
+        BackendAdapter(cfg, root_dir=ROOT_DIR, algo_name="ppo").build_task_env_cfg_override(),
+    )
+    env_cfg.validate()
+    rewards = env_cfg.rewards
+    assert rewards["head_upright"].func is head_upright_hold
+    assert rewards["head_upright"].weight == pytest.approx(3.0)
+    assert rewards["head_roll_band"].func is joint_band_cost
+    assert rewards["head_roll_band"].weight == pytest.approx(-0.5)
+    assert rewards["head_roll_band"].params["band_deg"] == [[-10.0, 10.0]]
+    assert rewards["leg_alternation"].func is running_leg_alternation
+    assert rewards["stride_length"].func is running_stride_length
+    stages = env_cfg.curriculum["head_roll_band_weight"].params["stages"]
+    assert stages[-1] == {"step": 36000, "weight": -4.0}
+    assert env_cfg.curriculum["head_upright_weight"] is None
+
+
+class _FakeFootView:
+    backend_type = "fake"
+    dimensions = (1, 1)
+
+    def __init__(self, values: np.ndarray) -> None:
+        self._values = values
+
+    def read(self) -> np.ndarray:
+        return self._values
+
+
+def _gait_env(*, contact: np.ndarray, feet_x: np.ndarray | None = None) -> ManagerBasedRlEnv:
+    num_envs = contact.shape[0]
+    identity = np.tile(np.asarray([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32), (num_envs, 1))
+    if feet_x is None:
+        feet_x = np.zeros((num_envs, 2), dtype=np.float32)
+    feet = np.zeros((num_envs, 2, 3), dtype=np.float32)
+    feet[:, :, 0] = feet_x
+    robot = SimpleNamespace(
+        num_bodies=2,
+        num_joints=2,
+        data=SimpleNamespace(
+            body_link_pos_w=feet,
+            root_link_pos_w=np.zeros((num_envs, 3), dtype=np.float32),
+            root_link_quat_w=identity,
+            joint_pos=np.zeros((num_envs, 2), dtype=np.float32),
+        ),
+    )
+
+    class _Scene:
+        def __getitem__(self, name: str) -> Any:
+            del name
+            return robot
+
+        def bind_sensor_data(self, names: tuple[str, ...]) -> _FakeFootView:
+            del names
+            return _FakeFootView(contact.astype(np.float32))
+
+    command = np.tile(np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32), (num_envs, 1))
+    return cast(
+        ManagerBasedRlEnv,
+        SimpleNamespace(
+            num_envs=num_envs,
+            step_dt=0.02,
+            scene=_Scene(),
+            command_manager=SimpleNamespace(get_command=lambda name: command),
+        ),
+    )
+
+
+def test_head_upright_hold_frees_the_nod_and_punishes_inversion() -> None:
+    root_half = math.sqrt(0.5)
+    quats = np.asarray(
+        [
+            [root_half, 0.0, -root_half, 0.0],
+            [0.92388, 0.0, -0.38268, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [root_half, 0.0, root_half, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    entity = SimpleNamespace(
+        num_bodies=1,
+        data=SimpleNamespace(body_link_quat_w=quats[:, None, :]),
+    )
+    env = cast(
+        ManagerBasedRlEnv,
+        SimpleNamespace(num_envs=4, scene={"robot": entity}),
+    )
+    term = head_upright_hold(
+        RewardTermCfg(
+            func=head_upright_hold,
+            weight=1.0,
+            params={
+                "free_tilt_deg": 45.0,
+                "zero_tilt_deg": 120.0,
+                "asset_cfg": SceneEntityCfg("robot", body_names=("jaw_soft",)),
+            },
+        ),
+        env,
+    )
+    np.testing.assert_allclose(term(env), [1.0, 1.0, 0.414214, 0.0], atol=1e-4)
+
+
+def test_running_stride_length_pays_for_scissoring_not_a_parked_split() -> None:
+    contact = np.asarray([[1.0, 0.0], [1.0, 0.0]], dtype=np.float32)
+    env = _gait_env(contact=contact)
+    robot = env.scene["robot"]
+    term = running_stride_length(
+        RewardTermCfg(
+            func=running_stride_length,
+            weight=1.0,
+            params={"stride_cap": 0.09, "tau_s": 0.2, "asset_cfg": SceneEntityCfg("robot")},
+        ),
+        env,
+    )
+
+    def write(step: int) -> None:
+        swing = 0.09 if step % 6 < 3 else -0.09
+        robot.data.body_link_pos_w[0, 0, 0] = 0.09
+        robot.data.body_link_pos_w[0, 1, 0] = -0.09
+        robot.data.body_link_pos_w[1, 0, 0] = swing
+        robot.data.body_link_pos_w[1, 1, 0] = -swing
+
+    parked = []
+    scissor = []
+    for step in range(100):
+        write(step)
+        rewards = term(env)
+        parked.append(float(rewards[0]))
+        scissor.append(float(rewards[1]))
+    assert np.mean(parked[50:]) < 0.05
+    assert np.mean(scissor[50:]) > 0.7
+
+
+def test_running_leg_alternation_rejects_a_parked_thigh_split() -> None:
+    contact = np.asarray([[1.0, 0.0]], dtype=np.float32)
+    split = math.radians(50.0)
+
+    def build() -> Any:
+        env = _gait_env(contact=contact)
+        term = running_leg_alternation(
+            RewardTermCfg(
+                func=running_leg_alternation,
+                weight=1.0,
+                params={
+                    "swing_cap_deg": 50.0,
+                    "tau_s": 0.2,
+                    "asset_cfg": SceneEntityCfg("robot"),
+                },
+            ),
+            env,
+        )
+        return env, term
+
+    env, term = build()
+    robot = env.scene["robot"]
+
+    def write_parked(step: int) -> None:
+        del step
+        robot.data.joint_pos[0, 0] = -0.5 * split
+        robot.data.joint_pos[0, 1] = -0.5 * split
+
+    parked = []
+    for step in range(100):
+        write_parked(step)
+        parked.append(float(term(env)[0]))
+
+    env, term = build()
+    robot = env.scene["robot"]
+    alternating = []
+    for step in range(100):
+        forward = 0.5 * split if step % 6 < 3 else -0.5 * split
+        robot.data.joint_pos[0, 0] = -forward
+        robot.data.joint_pos[0, 1] = -forward
+        alternating.append(float(term(env)[0]))
+
+    assert float(np.mean(parked[50:])) < 0.05
+    assert float(np.mean(alternating[50:])) > 0.7
