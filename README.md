@@ -80,15 +80,25 @@ Sprint 评估口径为 2.20 m/s 前向命令、1 秒预热、10 秒测量：
 
 ```bash
 uv run --no-sync scripts/eval_sprint_speed.py \
-  logs/rsl_rl_ppo/MicroduckSprintFlat/<run>/model_<iteration>.pt
+  examples/sprint_speed_1p68/model_11997.pt
 ```
 
 从已训好的速度策略做三段 robustify（钉住 1.65–2.20 m/s 命令带，逐步加 push / CoM / 倾角）：
 
 ```bash
 uv run --no-sync scripts/train_sprint_robust.py \
-  --load-run <sprint-run> --checkpoint 11749
+  --load-run <sprint-run> --checkpoint <last-iter> --stages B
 ```
+
+## 示例 checkpoint
+
+| 示例 | 速度 | 存活 | 头部倒置 | 说明 |
+|---|---|---|---|---|
+| [`examples/sprint_speed_1p68/`](examples/sprint_speed_1p68/) | 1.682 m/s | 89.8% | ~91% | 速度配方。大腿已左右交替；颈部折叠，头大部分时间倒置。 |
+| [`examples/sprint_head_upright/`](examples/sprint_head_upright/) | 1.315 m/s | 97.9% | 0.6% | 同一套交替步态上把头顶回朝天（本 PR 不含，见后续 PR）。 |
+
+每个目录含 `model_*.pt`、侧视 `play_video_side.gif`、`metrics.json` 和复现命令。
+`model.pt` 约 4.7 MB，直接入 git。
 
 ## 测试
 
