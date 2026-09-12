@@ -22,8 +22,8 @@ Official battery: 2.20 m/s command, 1 s warmup, 10 s measurement, 512 environmen
 Raw numbers: [`metrics.json`](metrics.json). Side-view loop: [`play_video_side.gif`](play_video_side.gif).
 
 The gait guards held: the thighs still trade places. The cost is 0.37 m/s of
-top speed. Heading drift was **not** fixed; it is a remaining limit, not a
-regression of this example.
+top speed. Heading drift is **not** fixed in this checkpoint; the closed-loop
+straight-run continuation is [`../sprint_straight_long/`](../sprint_straight_long/).
 
 ## Train
 

@@ -158,6 +158,104 @@ class heading_abs_cost(ManagerTermBase):
         return np.asarray(np.abs(error), dtype=get_global_dtype())
 
 
+def running_straightness_cost(
+    env: ManagerBasedRlEnv,
+    lateral_scale: float = 0.20,
+    yaw_rate_scale: float = 0.20,
+    command_name: str | None = None,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> np.ndarray:
+    """Linear cost for residual lateral velocity and yaw rate.
+
+    ``running_planar_drift_cost`` is quadratic. A persistent 0.04 rad/s yaw
+    rate barely registers per step, yet accumulates roughly 25 degrees over a
+    ten-second rollout. This term deliberately retains a constant gradient
+    near zero so a slow curve is not a cheap substitute for a straight run.
+
+    When ``command_name`` is set, the cost is against the twist command so a
+    spawn-heading yaw correction is not punished for turning the right way.
+    """
+    lateral_cap = _positive_real(
+        lateral_scale, label="running_straightness_cost lateral_scale"
+    )
+    yaw_cap = _positive_real(
+        yaw_rate_scale, label="running_straightness_cost yaw_rate_scale"
+    )
+    asset = cast("Entity", env.scene[asset_cfg.name])
+    lateral = np.nan_to_num(asset.data.root_link_lin_vel_b[:, 1], nan=0.0)
+    yaw_rate = np.nan_to_num(asset.data.root_link_ang_vel_b[:, 2], nan=0.0)
+    if command_name:
+        if not isinstance(command_name, str):
+            raise TypeError("running_straightness_cost command_name must be str")
+        command = np.asarray(env.command_manager.get_command(command_name))
+        if command.shape != (env.num_envs, 3):
+            raise ValueError(
+                "running_straightness_cost command must have shape "
+                f"({env.num_envs}, 3), received {command.shape}"
+            )
+        lateral = lateral - command[:, 1]
+        yaw_rate = yaw_rate - command[:, 2]
+    cost = 0.5 * (
+        np.clip(np.abs(lateral) / lateral_cap, 0.0, 1.0)
+        + np.clip(np.abs(yaw_rate) / yaw_cap, 0.0, 1.0)
+    )
+    return np.asarray(cost, dtype=get_global_dtype())
+
+
+class cross_track_abs_cost(ManagerTermBase):
+    """Linear lateral displacement from each episode's spawn-heading ray.
+
+    Instantaneous heading and yaw-rate rewards do not remember that many small
+    errors form a large arc. Cross-track displacement is that missing memory:
+    later steps become increasingly expensive while the policy curves away,
+    which makes a longer episode an actual straight-line curriculum rather
+    than merely a longer constant command.
+    """
+
+    def __init__(self, cfg: ManagerTermBaseCfg, env: ManagerBasedRlEnv):
+        super().__init__(env)
+        allowed = {"distance_cap", "asset_cfg"}
+        unexpected = set(cfg.params) - allowed
+        if unexpected:
+            raise TypeError(
+                f"cross_track_abs_cost received unsupported parameters: {sorted(unexpected)}"
+            )
+        self._cap = _positive_real(
+            cfg.params.get("distance_cap", 0.30),
+            label="cross_track_abs_cost distance_cap",
+        )
+        self._entity, self._heading_ref = _bind_heading_asset(
+            cfg, env, label="cross_track_abs_cost"
+        )
+        self._origin_xy = np.asarray(
+            self._entity.data.root_link_pos_w[:, :2],
+            dtype=get_global_dtype(),
+        ).copy()
+
+    def reset(self, env_ids: np.ndarray | slice | None) -> None:
+        ids = slice(None) if env_ids is None else env_ids
+        self._heading_ref[ids] = self._entity.data.heading_w[ids]
+        self._origin_xy[ids] = self._entity.data.root_link_pos_w[ids, :2]
+
+    def __call__(self, env: ManagerBasedRlEnv, **params: Any) -> np.ndarray:
+        del params
+        _refresh_heading_ref(env, self._entity, self._heading_ref)
+        fresh = env.episode_length_buf <= 1
+        position = np.asarray(
+            self._entity.data.root_link_pos_w[:, :2],
+            dtype=get_global_dtype(),
+        )
+        self._origin_xy[fresh] = position[fresh]
+        delta = np.nan_to_num(position - self._origin_xy, nan=0.0)
+        lateral = -delta[:, 0] * np.sin(self._heading_ref) + delta[
+            :, 1
+        ] * np.cos(self._heading_ref)
+        return np.asarray(
+            np.clip(np.abs(lateral) / self._cap, 0.0, 1.0),
+            dtype=get_global_dtype(),
+        )
+
+
 class head_facing_hold(ManagerTermBase):
     """Keep the head in the sagittal plane; pitch nod is free.
 

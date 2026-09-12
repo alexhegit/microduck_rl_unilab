@@ -16,10 +16,12 @@ from unilab.base.config_adapter import BackendAdapter
 from unilab.base.config_materialization import apply_cfg_overrides
 from unilab.cli import package_root
 from unilab.envs import ManagerBasedRlEnvCfg
+from unilab.envs.mdp import UniformVelocityCommand
 from unilab.managers import CurriculumTermCfg, RewardTermCfg, SceneEntityCfg
 from unilab.managers._types import ManagerBasedRlEnv
 
 from microduck_rl_unilab.tasks.microduck.sprint_terms import (
+    cross_track_abs_cost,
     head_facing_abs_cost,
     head_upright_hold,
     heading_hold,
@@ -28,9 +30,13 @@ from microduck_rl_unilab.tasks.microduck.sprint_terms import (
     running_forward_progress,
     running_leg_alternation,
     running_planar_drift_cost,
+    running_straightness_cost,
     running_stride_length,
 )
-from microduck_rl_unilab.tasks.microduck.manager_terms import MicroduckVelocityCommandCfg
+from microduck_rl_unilab.tasks.microduck.manager_terms import (
+    MicroduckVelocityCommand,
+    MicroduckVelocityCommandCfg,
+)
 from microduck_rl_unilab.tasks.microduck.deploy_contract import (
     MICRODUCK_ACTOR_OBS_DIM,
     MICRODUCK_CRITIC_OBS_DIM,
@@ -282,6 +288,167 @@ def test_sprint_rollfix_owner_declares_head_and_gait_guards() -> None:
     stages = env_cfg.curriculum["head_roll_band_weight"].params["stages"]
     assert stages[-1] == {"step": 36000, "weight": -4.0}
     assert env_cfg.curriculum["head_upright_weight"] is None
+
+
+def test_sprint_straightfix_owner_extends_and_remembers_the_line() -> None:
+    GlobalHydra.instance().clear()
+    with initialize_config_dir(config_dir=str(CONF_DIR), version_base="1.3"):
+        cfg = compose(
+            "config", overrides=["task=microduck_sprint_straightfix_flat/mujoco"]
+        )
+    registry.ensure_registries()
+    env_cfg = registry.materialize_env_config("MicroduckSprintFlat")
+    apply_cfg_overrides(
+        env_cfg,
+        BackendAdapter(
+            cfg, root_dir=ROOT_DIR, algo_name="ppo"
+        ).build_task_env_cfg_override(),
+    )
+    env_cfg.validate()
+
+    assert env_cfg.max_episode_seconds == pytest.approx(30.0)
+    twist = env_cfg.commands["twist"]
+    assert twist.resampling_time_range == [30.0, 30.0]
+    assert twist.ranges.lin_vel_y == [0.0, 0.0]
+    assert twist.ranges.ang_vel_z == [0.0, 0.0]
+    assert twist.hold_spawn_heading is True
+    assert twist.spawn_heading_stiffness == pytest.approx(2.5)
+    assert twist.spawn_cross_track_stiffness == pytest.approx(0.08)
+    assert twist.spawn_heading_yaw_rate_limit == pytest.approx(0.35)
+    assert env_cfg.events["push_robot"] is None
+    assert env_cfg.curriculum["head_roll_band_weight"] is None
+    assert env_cfg.curriculum["heading_abs_weight"] is None
+    assert env_cfg.rewards["forward_progress"].weight == pytest.approx(5.0)
+    assert env_cfg.rewards["spawn_progress"].weight == pytest.approx(3.0)
+    assert env_cfg.rewards["straightness"].func is running_straightness_cost
+    assert env_cfg.rewards["straightness"].params["command_name"] == "twist"
+    assert env_cfg.rewards["straightness"].weight == pytest.approx(-0.30)
+    assert env_cfg.rewards["cross_track"].func is cross_track_abs_cost
+    assert env_cfg.rewards["cross_track"].weight == pytest.approx(-0.40)
+    assert env_cfg.rewards["heading_abs"].weight == pytest.approx(-0.25)
+    assert env_cfg.rewards["tracking_ang_vel"].weight == pytest.approx(12.0)
+    assert env_cfg.rewards["head_roll_band"].weight == pytest.approx(-4.0)
+
+
+def test_sprint_steerfix_owner_restores_bidirectional_yaw_lessons() -> None:
+    GlobalHydra.instance().clear()
+    with initialize_config_dir(config_dir=str(CONF_DIR), version_base="1.3"):
+        cfg = compose(
+            "config", overrides=["task=microduck_sprint_steerfix_flat/mujoco"]
+        )
+    registry.ensure_registries()
+    env_cfg = registry.materialize_env_config("MicroduckSprintFlat")
+    apply_cfg_overrides(
+        env_cfg,
+        BackendAdapter(
+            cfg, root_dir=ROOT_DIR, algo_name="ppo"
+        ).build_task_env_cfg_override(),
+    )
+    env_cfg.validate()
+
+    twist = env_cfg.commands["twist"]
+    assert twist.hold_spawn_heading is False
+    assert twist.resampling_time_range == [4.0, 8.0]
+    assert twist.ranges.ang_vel_z == [-0.35, 0.35]
+    assert env_cfg.events["push_robot"] is None
+    assert env_cfg.curriculum["head_roll_band_weight"] is None
+    assert env_cfg.rewards["spawn_progress"] is None
+    assert env_cfg.rewards["heading_abs"] is None
+    assert env_cfg.rewards["heading_hold"] is None
+    assert env_cfg.rewards["tracking_ang_vel"].weight == pytest.approx(12.0)
+    assert env_cfg.rewards["planar_drift"].weight == pytest.approx(-0.20)
+    assert env_cfg.rewards["head_roll_band"].weight == pytest.approx(-4.0)
+
+
+def test_spawn_heading_capture_is_deferred_until_committed_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        UniformVelocityCommand,
+        "_update_command",
+        lambda self, env_ids=None: None,
+    )
+    term = object.__new__(MicroduckVelocityCommand)
+    term._hold_spawn_heading = True
+    term._spawn_heading_stiffness = 2.5
+    term._spawn_cross_track_stiffness = 0.1
+    term._spawn_heading_yaw_rate_limit = 1.2
+    term._spawn_heading = np.zeros(2, dtype=np.float32)
+    term._spawn_position_xy = np.zeros((2, 2), dtype=np.float32)
+    term._capture_spawn_heading = np.asarray([True, False])
+    term.robot = SimpleNamespace(
+        data=SimpleNamespace(
+            heading_w=np.asarray([1.0, -1.0], dtype=np.float32),
+            root_link_pos_w=np.zeros((2, 3), dtype=np.float32),
+        )
+    )
+    term.vel_command_b = np.zeros((2, 3), dtype=np.float32)
+
+    term._update_command(np.asarray([0], dtype=np.intp))
+    np.testing.assert_allclose(term._spawn_heading, [1.0, 0.0])
+    np.testing.assert_allclose(term.vel_command_b[0, 2], 0.0)
+
+    term.robot.data.heading_w[0] = 1.2
+    term._update_command(None)
+    np.testing.assert_allclose(term.vel_command_b[0, 2], -0.5, atol=1.0e-6)
+
+    term.robot.data.heading_w[0] = 1.0
+    term.robot.data.root_link_pos_w[0, :2] = 2.0 * np.asarray(
+        [-math.sin(1.0), math.cos(1.0)]
+    )
+    term._update_command(None)
+    np.testing.assert_allclose(term.vel_command_b[0, 2], -0.2, atol=1.0e-6)
+
+
+def test_linear_straightness_and_cross_track_keep_small_errors_visible() -> None:
+    entity = SimpleNamespace(
+        data=SimpleNamespace(
+            root_link_lin_vel_b=np.asarray(
+                [[1.3, 0.04, 0.0], [1.3, 0.0, 0.0]], dtype=np.float32
+            ),
+            root_link_ang_vel_b=np.asarray(
+                [[0.0, 0.0, 0.04], [0.0, 0.0, 0.0]], dtype=np.float32
+            ),
+            root_link_pos_w=np.zeros((2, 3), dtype=np.float32),
+            heading_w=np.zeros(2, dtype=np.float32),
+        )
+    )
+    env = cast(
+        ManagerBasedRlEnv,
+        SimpleNamespace(
+            num_envs=2,
+            episode_length_buf=np.asarray([10, 10], dtype=np.int64),
+            scene={"robot": entity},
+            command_manager=SimpleNamespace(
+                get_command=lambda name: np.asarray(
+                    [[1.3, 0.0, 0.0], [1.3, 0.0, 0.0]], dtype=np.float32
+                )
+            ),
+        ),
+    )
+    straightness = running_straightness_cost(
+        env,
+        command_name="twist",
+        lateral_scale=0.20,
+        yaw_rate_scale=0.20,
+        asset_cfg=SceneEntityCfg("robot"),
+    )
+    term = cross_track_abs_cost(
+        RewardTermCfg(
+            func=cross_track_abs_cost,
+            weight=-1.0,
+            params={
+                "distance_cap": 0.40,
+                "asset_cfg": SceneEntityCfg("robot"),
+            },
+        ),
+        env,
+    )
+    entity.data.root_link_pos_w[0, :2] = np.asarray([1.0, 0.15], dtype=np.float32)
+    entity.data.root_link_pos_w[1, :2] = np.asarray([1.0, 0.0], dtype=np.float32)
+    cross_track = term(env)
+    assert straightness[0] > straightness[1]
+    assert cross_track[0] > cross_track[1]
 
 
 class _FakeFootView:

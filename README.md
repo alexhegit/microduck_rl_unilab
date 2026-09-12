@@ -97,10 +97,20 @@ uv run --no-sync scripts/train_sprint_robust.py \
 | 示例 | 速度 | 存活 | 头部倒置 | 说明 |
 |---|---|---|---|---|
 | [`examples/sprint_speed_1p68/`](examples/sprint_speed_1p68/) | 1.682 m/s | 89.8% | ~91% | 速度配方。大腿已左右交替；颈部折叠，头大部分时间倒置。 |
-| [`examples/sprint_head_upright/`](examples/sprint_head_upright/) | 1.315 m/s | 97.9% | 0.6% | 同一套交替步态，头顶朝天、面朝前；航向仍约 42° 左偏。 |
+| [`examples/sprint_head_upright/`](examples/sprint_head_upright/) | 1.315 m/s | 97.9% | 0.6% | 同一套交替步态，头顶朝天、面朝前；10 s 航向仍约 42° 左偏。 |
+| [`examples/sprint_straight_long/`](examples/sprint_straight_long/) | ~0.83 m/s 长时 | 300 s 100% | 0 | 续训后闭环节航向 + 横向误差。300 s 平均航向 1.7°，直姿窗口 295 s。 |
 
-每个目录含 `model_*.pt`、侧视 `play_video_side.gif`、`metrics.json` 和复现命令。
+每个目录含 `model_*.pt`、可视化、`metrics.json` 和复现命令。
 `model.pt` 约 4.7 MB，直接入 git。
+
+长时直线评测（需要闭环 owner，不要用默认 `microduck_sprint_flat`）：
+
+```bash
+uv run --no-sync scripts/eval_sprint_speed.py \
+  examples/sprint_straight_long/model_19297.pt \
+  --owner microduck_sprint_straightfix_flat/mujoco \
+  --duration 300 --num-envs 128
+```
 
 ## 测试
 
